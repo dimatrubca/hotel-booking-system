@@ -401,3 +401,6 @@ docs/_build/
 
 # PyBuilder
 target/
+
+
+*.db
