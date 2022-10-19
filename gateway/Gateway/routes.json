@@ -1,0 +1,27 @@
+﻿{
+  "routes": [
+    {
+      "endpoint": "/movies",
+      "destination": {
+        "path": "http://localhost:8090/movies/",
+        "requiresAuthentication": "true"
+      }
+    },
+    {
+      "endpoint": "/songs",
+      "destination": {
+        "path": "https://www.google.com/",
+        "requiresAuthentication": "false"
+      }
+    },
+    {
+      "endpoint": "/hotels",
+      "destination": {
+        "path": "http://127.0.0.1:8000/hotels/"
+      }
+    }
+  ],
+  "authenticationService": {
+    "path": "http://localhost:8080/api/auth/"
+  }
+}
