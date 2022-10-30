@@ -2,7 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from database import SessionLocal, engine
+from database import SessionLocal, engine, get_db
 from services import hotel_service
 import schemas.city as city_schemas
 import models, schemas_old
@@ -13,15 +13,6 @@ import signal
 router = APIRouter(
     prefix="/cities",
 )
-
-# Dependency
-def get_db():
-    db = SessionLocal()
-
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def raise_timeout(_, frame):

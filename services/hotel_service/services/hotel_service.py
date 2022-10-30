@@ -1,8 +1,12 @@
+import logging
 from sqlalchemy.orm import Session
 
 import models
 import schemas.hotel as hotel_schemas
 import schemas.room as room_schemas
+
+logger = logging.getLogger(__name__)
+
 
 def get_hotel(db: Session, hotel_id: int):   
     return db.query(models.Hotel).filter(models.Hotel.id == hotel_id).first()
@@ -18,6 +22,8 @@ def create_hotel(db: Session, hotel: hotel_schemas.HotelCreate):
     db.add(db_hotel)
     db.commit()
     db.refresh(db_hotel)
+
+    logger.info(f"Hotel id={db_hotel.id} inserted into db")
 
     return db_hotel
 

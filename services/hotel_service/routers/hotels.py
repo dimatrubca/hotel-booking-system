@@ -3,39 +3,28 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from functools import wraps
 
-from database import SessionLocal, engine
+from database import SessionLocal, engine, get_db
 # from schemas import hotel as hotel_schemas
 # from schemas import room as room_schemas
 import schemas.hotel as hotel_schemas
 import schemas.room as room_schemas
+import logging
+
 
 from services import hotel_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/hotels",
 )
 
-# Dependency
-def get_db():
-    db = SessionLocal()
-
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def only_admin(func):
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        return await func(*args, **kwargs)
-
-    return wrapper
 
 @router.post("/")
 def create_hotel(hotel: hotel_schemas.HotelCreate, db: Session = Depends(get_db)):
     # db_hotel = hotel_servce.get
     hotel = hotel_service.create_hotel(db=db, hotel=hotel)
+
     return hotel
 
 

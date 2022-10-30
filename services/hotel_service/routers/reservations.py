@@ -2,7 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from database import SessionLocal, engine
+from database import SessionLocal, engine, get_db
 import schemas.country as country_schemas
 import schemas.reservation as reservation_schemas
 from services import hotel_service
@@ -12,15 +12,6 @@ import models, schemas_old
 router = APIRouter(
     prefix="/reservations",
 )
-
-# Dependency
-def get_db():
-    db = SessionLocal()
-
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.post("/")
