@@ -17,6 +17,9 @@ namespace HotelRatingServiceML.Model
         // Method for consuming model in your app
         public static ModelOutput Predict(ModelInput input)
         {
+            Console.WriteLine(input.Rating);
+            Console.WriteLine(input.Review);
+            Console.WriteLine();
             ModelOutput result = PredictionEngine.Value.Predict(input);
             return result;
         }
@@ -27,7 +30,7 @@ namespace HotelRatingServiceML.Model
             MLContext mlContext = new MLContext();
 
             // Load model & create prediction engine
-            string modelPath = @"C:\Users\dimat\AppData\Local\Temp\MLVSTools\HotelRatingServiceML\HotelRatingServiceML.Model\MLModel.zip";
+            string modelPath = @"C:\Data\Uni\Sem7\PAD\hotel-booking-system\services\hotel_rating_service\HotelRatingService\HotelRatingServiceML.Model\MLModel.zip";
             ITransformer mlModel = mlContext.Model.Load(modelPath, out var modelInputSchema);
             var predEngine = mlContext.Model.CreatePredictionEngine<ModelInput, ModelOutput>(mlModel);
 

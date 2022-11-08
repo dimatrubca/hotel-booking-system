@@ -12,14 +12,14 @@ namespace HotelRatingService
 {
     public class WorkerPool
     {
-        public int AvailablePredictors { get; set; }
+        public int AvailablePredictors { get; set; } //todo: add mutex around AvailablePredictors
         SimplePriorityQueue<PredictDTO> priorityQueue = new SimplePriorityQueue<PredictDTO>();
 
 
         public WorkerPool()
         {
             // instantiate predictors
-            AvailablePredictors = 10;
+            AvailablePredictors = 5;
 
             Thread thread = new Thread(new ThreadStart(ExecuteTasks));
             thread.Start();
@@ -35,6 +35,8 @@ namespace HotelRatingService
                     Priority = predictDTO.Priority,
                     Review = predictDTO.Review
                 });
+
+                Thread.Sleep(5 * 1000);
 
                 predictDTO.Result = result;
 
@@ -77,7 +79,8 @@ namespace HotelRatingService
 
             lock (predictDTO.sync)
             {
-                priorityQueue.Enqueue(predictDTO, predictRequest.Priority);
+                priorityQueue.Enqueue(predictDTO, -predictRequest.Priority);
+                Console.WriteLine($"Enqueued: {predictRequest.Priority}");
                 Monitor.Wait(predictDTO.sync);
             }
 

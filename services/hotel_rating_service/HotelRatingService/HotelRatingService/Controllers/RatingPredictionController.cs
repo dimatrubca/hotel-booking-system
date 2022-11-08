@@ -14,18 +14,16 @@ namespace HotelRatingService.Controllers
     {
 
         private readonly ILogger<RatingPredictionController> _logger;
-        private readonly IRatingPredictionService _ratingPredictionService;
         private readonly WorkerPool _workerPool;
 
-        public RatingPredictionController(ILogger<RatingPredictionController> logger, IRatingPredictionService ratingPredictionService, WorkerPool workerPool)
+        public RatingPredictionController(ILogger<RatingPredictionController> logger, WorkerPool workerPool)
         {
             _logger = logger;
-            _ratingPredictionService = ratingPredictionService;
             _workerPool = workerPool;
         }
 
-        [HttpGet]
-        public async Task<IActionResult> Get([FromQuery] PredictRequestDTO predictRequestDTO)
+        [HttpPost]
+        public async Task<IActionResult> Predict(PredictRequestDTO predictRequestDTO)
         {
             var result = _workerPool.Predict(predictRequestDTO);
 
