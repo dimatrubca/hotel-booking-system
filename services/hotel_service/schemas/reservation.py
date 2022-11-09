@@ -10,11 +10,11 @@ class ReservationBase(BaseModel):
     user_id: str
 
 
-class ReservationCreate(HotelBase):
+class ReservationCreate(ReservationBase):
     pass
 
 
-class Reservtion(HotelBase):
+class Reservation(ReservationBase):
     id: int 
 
     class Config:
