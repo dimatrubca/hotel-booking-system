@@ -1,3 +1,5 @@
+import functools
+import threading
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -9,6 +11,7 @@ from database import SessionLocal, engine, get_db
 import schemas.hotel as hotel_schemas
 import schemas.room as room_schemas
 import logging
+from utils import timeout
 
 
 from services import hotel_service
@@ -20,6 +23,8 @@ router = APIRouter(
 )
 
 
+    
+
 @router.post("/")
 def create_hotel(hotel: hotel_schemas.HotelCreate, db: Session = Depends(get_db)):
     # db_hotel = hotel_servce.get
@@ -30,8 +35,13 @@ def create_hotel(hotel: hotel_schemas.HotelCreate, db: Session = Depends(get_db)
 
 @router.get("/", response_model=List[hotel_schemas.Hotel])
 def get_hotels(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    hotels = hotel_service.get_hotels(db, skip=skip, limit=limit)
-    
+    hotels = None
+
+    try:
+        hotels = timeout(timeout=1)(lambda: hotel_service.get_hotels(db, skip=skip, limit=limit))()
+    except Exception as e:
+        raise HTTPException(status_code=408)
+
     return hotels
 
 

@@ -15,34 +15,6 @@ router = APIRouter(
 )
 
 
-def raise_timeout(_, frame):
-    raise TimeoutError
-
-@contextmanager
-def timeout_after(seconds: int):
-    print("inside decorator")
-    # Register a function to raise a TimeoutError on the signal.
-    signal.signal(signal.SIGALRM, raise_timeout)
-    # Schedule the signal to be sent after `seconds`.
-    signal.alarm(seconds)
-
-    try:
-        yield
-    finally:
-        # Unregister the signal so it won't be triggered if the timeout is not reached.
-        signal.signal(signal.SIGALRM, signal.SIG_IGN)
-
-
-import time
-import asyncio
-
-@router.get("/test")
-@timeout_after(1)
-async def test():
-    print("before sleep")
-    await asyncio.sleep(3)
-    
-    return {"hello": "world"}
 
 
 @router.post("/")
