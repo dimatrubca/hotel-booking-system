@@ -1,16 +1,21 @@
 
 from datetime import datetime, timedelta
-from threading import Thread
+from threading import Thread, Timer
 from typing import List, Optional
 
+import asyncio
+import aiohttp
+
 from models import CacheRequest, CachedResponse
-from settings import DEFAULT_EXPIRATION_TIME
+from config import settings
+from bully import Bully
 
 import functools
 import logging
-import settings
+from config import settings
 import requests
 import data_store
+from schemas import Event
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +69,7 @@ def get_responses(urls: List[str]):
 
 # todo: solve header not passing as list
 def add_to_cache(cache_params: CacheRequest, cache_control_header: Optional[List[str]]):
-    expires_in = DEFAULT_EXPIRATION_TIME
+    expires_in = settings.DEFAULT_EXPIRATION_TIME
     
     if not cache_params.url.endswith('/'):
         cache_params.url = cache_params.url + '/'
@@ -91,8 +96,19 @@ def add_to_cache(cache_params: CacheRequest, cache_control_header: Optional[List
     data_store.add(service_domain, path, expiration_time, cache_params.data)
 
 
+def get_events_by_offset_start(start_offset):
+    backlog = data_store.get_backlog()
+
+    start_index = list(x['offset'] == start_offset for x in backlog).index(True)
+    
+    events = backlog[start_index:]
+
+    return events
+
+
 
 def register_on_service_discovery():
+    # return
     result = requests.post(settings.SERVICE_DISCOVERY + 'register', json = {
         'service_id': settings.SERVICE_ID,
         'name': settings.SERVICE_NAME,
@@ -103,11 +119,16 @@ def register_on_service_discovery():
 
 
 def unregister_on_service_discovery():
+    # return
     result = requests.post(settings.SERVICE_DISCOVERY + 'unregister', json = {
         'service_id': settings.SERVICE_ID,
     })
     
     logger.info(f"unregister_service_discovery: {result.status_code}")
+
+
+
+
 
 
 def timeout(timeout):
@@ -134,3 +155,51 @@ def timeout(timeout):
             return ret
         return wrapper
     return deco
+
+
+async def fetch(session, url):
+    async with session.get(url) as response:
+        return response
+
+
+async def fetch_all(urls, loop):
+    async with aiohttp.ClientSession(loop=loop) as session:
+        results = await asyncio.gather(*[fetch(session, url) for url in urls], return_exceptions=True)
+     
+        return results
+
+
+async def post_json(session, url, data_json):
+    logger.info(f"Post_json to: {url}, data={data_json}")
+    async with session.post(url, json=data_json) as response:
+        return response
+
+
+async def post_json_all(urls, data_list, loop):
+    async with aiohttp.ClientSession(loop=loop) as session:
+        results = await asyncio.gather(*[post_json(session, url, data) for url, data in zip(urls, data_list)], return_exceptions=False)# todo: set to true, handle excpeptions outside
+
+        return results
+
+
+async def fire_event(event):
+    response = requests.get(settings.SERVICE_DISCOVERY_CACHE_URL)
+    json_response = response.json()
+    nodes = {}
+
+    for node in json_response:
+        nodes[node['id']] = 'http://' f'{node["host"]}:{node["port"]}' #todo: add htttp to host while registering
+        print(f"queried cache nodes from service_discovery:\n")
+
+    nodes.pop(settings.SERVICE_ID, None)
+    urls = list(nodes.values())
+    urls = [x + '/update' for x in urls]
+
+    loop = asyncio.get_event_loop()
+    _ = await post_json_all(urls, [event] * len(urls), loop) 
+
+
+def process_event(event: Event):
+    # todo: check event send by coordinator, check replication id matches
+    # todo: check fields, if add requiers expiration time
+    data_store.process_event(event)
