@@ -1,27 +1,25 @@
 ﻿{
   "routes": [
     {
-      "endpoint": "/movies",
-      "destination": {
-        "path": "http://localhost:8090/movies/",
-        "requiresAuthentication": "true"
-      }
+      "endpoint": "/hotel",
+      "serviceName": "hotel",
+      "enableCircuitBreaker": true
     },
     {
-      "endpoint": "/songs",
-      "destination": {
-        "path": "https://www.google.com/",
-        "requiresAuthentication": "false"
-      }
+      "endpoint": "/authenticate",
+      "serviceName": "authentication",
+      "enableCircuitBreaker": false
     },
     {
-      "endpoint": "/hotels",
-      "destination": {
-        "path": "http://127.0.0.1:8000/hotels/"
-      }
+      "endpoint": "/rating",
+      "serviceName": "hotel_rating",
+      "enableCircuitBreaker": false
     }
   ],
   "authenticationService": {
-    "path": "http://localhost:8080/api/auth/"
+    "path": "http://authentication_server:8000/api/auth/"
+  },
+  "serviceDiscovery": {
+    "path": "http://service_discovery:8005/"
   }
 }

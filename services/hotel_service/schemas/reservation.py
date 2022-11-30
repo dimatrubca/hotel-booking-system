@@ -1,12 +1,12 @@
+import datetime
 from pydantic import BaseModel
 
 
 class ReservationBase(BaseModel):
     hotel_id: str
     room_id: str
-    check_in: int
-    checkout: int
-    city_id: int
+    check_in: datetime.datetime
+    checkout: datetime.datetime
     user_id: str
 
 

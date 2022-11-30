@@ -9,5 +9,10 @@ namespace HotelRatingService.DTOs
     {
         public string Review { get; set; }
         public int Priority { get; set; }
+
+        public override string ToString()
+        {
+            return $"Review={Review}, Priority={Priority}";
+        }
     }
 }

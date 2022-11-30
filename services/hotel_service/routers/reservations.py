@@ -7,7 +7,7 @@ from database import SessionLocal, engine, get_db
 import schemas.country as country_schemas
 import schemas.reservation as reservation_schemas
 from services import hotel_service
-import models, schemas_old
+import models
 
 import time
 

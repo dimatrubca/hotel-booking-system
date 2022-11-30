@@ -1,3 +1,4 @@
+import logging
 from this import d
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ load_dotenv()
 AUTHSECRET = os.getenv("AUTHSECRET")
 EXPIRESSECONDS = os.getenv("EXPIRESSECONDS")
 
+logger = logging.getLogger(__name__)
 
 def authenticate(db: Session, client_id, client_secret):
     client = db.query(models.Client).filter((models.Client.client_id == client_id) & (models.Client.client_secret == client_secret)).first() #todo: handle if none
@@ -33,9 +35,11 @@ def authenticate(db: Session, client_id, client_secret):
 def verify(token):
     try:
         decoded = jwt.decode(token, AUTHSECRET, algorithms=['HS256'])
+        logger.info(f"token {token} verified")
         return decoded
     except Exception as error:
         print(error)
+        logger.info(f"token {token} invalid")
 
         return {'success': False}
 

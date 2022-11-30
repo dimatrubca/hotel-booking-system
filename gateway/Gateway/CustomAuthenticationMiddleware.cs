@@ -18,7 +18,7 @@ namespace Gateway
 
         public async Task InvokeAsync(HttpContext context)
         {
-            var token = context.Request.Headers["authorization"];
+            var token = context.Request.Headers["Authorization"];
 
             if (!string.IsNullOrWhiteSpace(token))
             {
@@ -27,19 +27,27 @@ namespace Gateway
                 {
                     try
                     {
-                        client.DefaultRequestHeaders.Add("authorization", token.ToString());
+                        client.DefaultRequestHeaders.Add("Authorization", token.ToString());
 
-                        HttpResponseMessage response = await client.PostAsync("http://localhost:8001/test/verify", null);
+                        Console.WriteLine("Before response creation...");
+                        HttpResponseMessage response = await client.PostAsync("http://authentication_server:8000/verify", new StringContent(String.Empty));
+                        Console.WriteLine("After response creation...");
 
                         response.EnsureSuccessStatusCode();
                         string responseBody = await response.Content.ReadAsStringAsync();
 
                         Console.WriteLine("Response body auth middleware:");
                         Console.WriteLine(responseBody);
+                        Console.WriteLine("...\n\n\n\n");
                     } catch(HttpRequestException e)
                     {
                         Console.WriteLine("error auth middleware: " + e.ToString());
-                        context.Request.Headers.Remove("authorization");
+                        context.Request.Headers.Remove("Authorization");
+                    } catch (Exception e)
+                    {
+                        Console.WriteLine(e.ToString());
+                        Console.WriteLine(e.Message);
+                        Console.WriteLine("...\n\n\n");
                     }
                 }
             }

@@ -1,3 +1,4 @@
+import logging
 from typing import List, Union
 from fastapi import APIRouter, Depends, HTTPException, Header
 from requests import request
@@ -5,14 +6,14 @@ from sqlalchemy.orm import Session
 import hashlib
 from auth_service import register, authenticate, verify as verify_token
 
-from database import SessionLocal, engine
+from database import SessionLocal
 from schemas.auth import AuthSchema
-import models
 from schemas.client import CreateClient
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
-    prefix="/test",
+    # prefix="/",
 )
 
 # Dependency
@@ -48,8 +49,9 @@ def auth(auth_data: AuthSchema, db: Session = Depends(get_db)):
 
     return authentication
     
+    
 @router.post("/verify")
-def verify(authorization: Union[str, None] = Header(default=None)):
+def verify(authorization: Union[str, None] = Header(default=None, alias='Authorization')):
     print("authorization:",authorization)
     token = authorization.replace("Bearer ", "")
     verification = verify_token(token)

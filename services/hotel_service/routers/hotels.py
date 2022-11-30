@@ -1,5 +1,9 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+import base64
+import functools
+import json
+import threading
+from typing import List, Optional, Union
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy.orm import Session
 from functools import wraps
 
@@ -9,6 +13,7 @@ from database import SessionLocal, engine, get_db
 import schemas.hotel as hotel_schemas
 import schemas.room as room_schemas
 import logging
+from utils import timeout
 
 
 from services import hotel_service
@@ -20,8 +25,30 @@ router = APIRouter(
 )
 
 
+
+async def verify_token(request: Request, authorization: Union[str, None] = Header(default=None, alias='Authorization')):
+    print('authorization header:', authorization)
+    print('request headers:', request.headers)
+    if authorization != "" and authorization != None: #todo: handle invalid auth format
+        tokens = authorization.split('.')
+        
+        if len(tokens) < 3:
+            raise HTTPException(status_code=401)
+        
+        b = tokens[1]
+        decoded = base64.b64decode(b + '==')
+        decoded_dict = json.loads(decoded)
+        is_admin = decoded_dict['is_admin']
+
+        if is_admin == '1':
+            return
+
+    raise HTTPException(status_code=401)
+    
+
 @router.post("/")
-def create_hotel(hotel: hotel_schemas.HotelCreate, db: Session = Depends(get_db)):
+@router.post("")
+def create_hotel(hotel: hotel_schemas.HotelCreate, db: Session = Depends(get_db), dependencies=Depends(verify_token)):
     # db_hotel = hotel_servce.get
     hotel = hotel_service.create_hotel(db=db, hotel=hotel)
 
@@ -30,8 +57,14 @@ def create_hotel(hotel: hotel_schemas.HotelCreate, db: Session = Depends(get_db)
 
 @router.get("/", response_model=List[hotel_schemas.Hotel])
 def get_hotels(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    hotels = hotel_service.get_hotels(db, skip=skip, limit=limit)
-    
+    logger.info("inside get_hotels")
+    hotels = None
+
+    try:
+        hotels = timeout(timeout=1)(lambda: hotel_service.get_hotels(db, skip=skip, limit=limit))()
+    except Exception as e:
+        raise HTTPException(status_code=408)
+
     return hotels
 
 

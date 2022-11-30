@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, engine, get_db
 import schemas.country as country_schemas
 from services import hotel_service
-import models, schemas_old
+import models
 
 
 router = APIRouter(

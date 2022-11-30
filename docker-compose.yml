@@ -1,0 +1,145 @@
+version: '3.9'
+services:
+  service_discovery:
+    build: ./services/service_discovery
+    ports:
+      - "8005:8005"
+    networks:
+      - elk
+  authentication_server:
+    build: ./services/authentication_server
+    ports:
+      - "8000:8000"
+    depends_on:
+      - service_discovery
+    networks:
+      - elk
+
+  hotel_service:
+    build: ./services/hotel_service
+    ports:
+      - "8001:8001"
+    depends_on:
+      - service_discovery
+    volumes:
+      - hotel_service_logs:/code/logs
+    networks:
+      - elk
+
+  cache_service:
+    build: ./services/cache_service
+    ports: 
+      - "8004:8004"
+    depends_on:
+      - service_discovery
+    networks:
+      - elk
+
+  gateway:
+    build: ./gateway
+    ports:
+      - "80:80"
+
+    depends_on:
+      - service_discovery
+      - authentication_server
+      - hotel_service
+    
+    networks:
+      - elk
+
+
+  setup:
+    build:
+      context: docker-elk/setup/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    init: true
+    volumes:
+      - ./docker-elk/setup/entrypoint.sh:/entrypoint.sh:ro,Z
+      - ./docker-elk/setup/helpers.sh:/helpers.sh:ro,Z
+      - ./docker-elk/setup/roles:/roles:ro,Z
+      - .setup:/state:Z
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+      BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
+      MONITORING_INTERNAL_PASSWORD: ${MONITORING_INTERNAL_PASSWORD:-}
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+  elasticsearch:
+    build:
+      context: docker-elk/elasticsearch/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    volumes:
+      - ./docker-elk/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+      - elasticsearch:/usr/share/elasticsearch/data:Z
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment:
+      node.name: elasticsearch
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      # Bootstrap password.
+      # Used to initialize the keystore during the initial startup of
+      # Elasticsearch. Ignored on subsequent runs.
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      # Use single node discovery in order to disable production mode and avoid bootstrap checks.
+      # see: https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
+      discovery.type: single-node
+    networks:
+      - elk
+
+  logstash:
+    build:
+      context: docker-elk/logstash/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    volumes:
+      - ./docker-elk/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
+      - ./docker-elk/logstash/pipeline:/usr/share/logstash/pipeline:ro,Z
+      - hotel_service_logs:/usr/share/hotel_service_logs
+    command: bin/logstash -f pipeline/logstash.conf --config.reload.automatic
+    ports:
+      - 5044:5044
+      - 50000:50000/tcp
+      - 50000:50000/udp
+      - 9600:9600
+    environment:
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
+      LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    build:
+      context: docker-elk/kibana/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    volumes:
+      - ./docker-elk/kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+    ports:
+      - 5601:5601
+    environment:
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+networks:
+  elk:
+    driver: bridge
+
+volumes:
+  setup:
+  elasticsearch:
+  hotel_service_logs:
+

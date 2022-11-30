@@ -7,6 +7,8 @@ using Priority_Queue;
 using HotelRatingServiceML.Model;
 using HotelRatingService.DTOs;
 using System.Threading;
+using HotelRatingService.Controllers;
+using Microsoft.Extensions.Logging;
 
 namespace HotelRatingService
 {
@@ -14,10 +16,12 @@ namespace HotelRatingService
     {
         public int AvailablePredictors { get; set; } //todo: add mutex around AvailablePredictors
         SimplePriorityQueue<PredictDTO> priorityQueue = new SimplePriorityQueue<PredictDTO>();
+        private readonly ILogger<WorkerPool> _logger;
 
 
-        public WorkerPool()
+        public WorkerPool(ILogger<WorkerPool> logger)
         {
+            _logger = logger;
             // instantiate predictors
             AvailablePredictors = 5;
 
@@ -36,7 +40,9 @@ namespace HotelRatingService
                     Review = predictDTO.Review
                 });
 
-                Thread.Sleep(5 * 1000);
+                Random r = new Random();
+                int sleepSeconds = 10;// r.Next(3, 10);
+                Thread.Sleep(sleepSeconds * 1000);
 
                 predictDTO.Result = result;
 
@@ -59,6 +65,7 @@ namespace HotelRatingService
                     {
                         AvailablePredictors -= 1;
                         var predictRequest = priorityQueue.Dequeue();
+                        _logger.LogInformation($"Denqueued: {predictRequest.Priority}, {predictRequest.Review}");
 
                         PredictTask(predictRequest);
                     } else
@@ -80,7 +87,8 @@ namespace HotelRatingService
             lock (predictDTO.sync)
             {
                 priorityQueue.Enqueue(predictDTO, -predictRequest.Priority);
-                Console.WriteLine($"Enqueued: {predictRequest.Priority}");
+                //Console.WriteLine($"Enqueued: {predictRequest.Priority}");
+                _logger.LogInformation($"Enqueued: {predictRequest.Priority}, {predictDTO.Review}");
                 Monitor.Wait(predictDTO.sync);
             }
 

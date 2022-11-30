@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace HotelRatingService.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [Route("")]
     public class RatingPredictionController : ControllerBase
     {
 
@@ -22,10 +22,12 @@ namespace HotelRatingService.Controllers
             _workerPool = workerPool;
         }
 
-        [HttpPost]
+        [HttpPost("predict")]
         public async Task<IActionResult> Predict(PredictRequestDTO predictRequestDTO)
         {
+           // _logger.LogInformation(predictRequestDTO.ToString());
             var result = _workerPool.Predict(predictRequestDTO);
+            //_logger.LogInformation($"Finished: {predictRequestDTO.ToString()}");
 
             return Ok(result);
         }

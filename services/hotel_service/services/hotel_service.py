@@ -1,4 +1,5 @@
 import logging
+import time
 from sqlalchemy.orm import Session
 
 import models
@@ -13,6 +14,9 @@ def get_hotel(db: Session, hotel_id: int):
 
 
 def get_hotels(db: Session, skip: int = 0, limit: int = 100):
+    if limit == 500:
+        time.sleep(5)
+        
     return db.query(models.Hotel).offset(skip).limit(limit).all()
 
 
