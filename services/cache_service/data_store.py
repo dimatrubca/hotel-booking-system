@@ -7,6 +7,7 @@ import logging
 import uuid
 
 import requests
+import utils
 
 from doubly_linked_list import DoublyLinkedList, Node
 from schemas import Event
@@ -97,11 +98,14 @@ class DataStore:
     
     def process_event(self, event: Event):
         # duplicate event
-        if event.offset <= event.offset:
+        if event.offset <= self.offset:
             return
             
         if event.offset > event.offset + 1:
+            logger.info(f"queueing event, event_offset: {event.offset}, current offset: {self.offset}")
             self.events_queue[event.offset] = event
+
+            return
 
 
         if event.operation == 'add':
@@ -110,25 +114,25 @@ class DataStore:
             self.remove_by_key(event.service, event.key)
         else:
             raise Exception(f"Invalid event operation: {event.operation}")
+        
 
-
-    def remove_by_key(self, service_domain, key):
-        node:Node = self.services_cache_map[service_domain].get(key, None)
+    def remove_by_key(self, service_name, key):
+        node:Node = self.services_cache_map[service_name].get(key, None)
 
         if node == None:
             raise Exception(f"Key={key} doesn't exist")
         
-        self.services_cache_list[service_domain].remove(node)
+        self.services_cache_list[service_name].remove(node)
 
-        logger.info(f"Item {key} (service: {service_domain}) removed")
+        logger.info(f"Item {key} (service: {service_name}) removed")
 
     
     def update_state_from_copy(self):
         raise NotImplementedError()
 
     
-    def remove_expired_items(self,  service_domain):
-        if service_domain not in self.expiration_time_heap:
+    def remove_expired_items(self,  service_name):
+        if service_name not in self.expiration_time_heap:
             return
         
         expiration_time_heap = self.expiration_time_heap
@@ -138,25 +142,25 @@ class DataStore:
 
         while not expiration_time_heap.empty() and expiration_time_heap.queue[0][0].expiration_time < now:
             item = expiration_time_heap.get() #dead lock ??? block=False
-            self.services_cache_list[service_domain].remove(item)
+            self.services_cache_list[service_name].remove(item)
         
         self.expiration_time_heap.release()
 
     
 
 
-    def add(self, service_domain, path, expiration_time, data: str):
-        if service_domain not in self.services:
-            self.services.append(service_domain)
-            self.services_cache_map[service_domain]: Dict[str, Node] = {}
-            self.services_cache_list[service_domain] = DoublyLinkedList()
-            self.expiration_time_heap[service_domain] = PriorityQueue()
+    def add(self, service_name, path, expiration_time, data: str):
+        if service_name not in self.services:
+            self.services.append(service_name)
+            self.services_cache_map[service_name]: Dict[str, Node] = {}
+            self.services_cache_list[service_name] = DoublyLinkedList()
+            self.expiration_time_heap[service_name] = PriorityQueue()
             
-        cached_item_node = self.services_cache_map[service_domain].get(path, None)
+        cached_item_node = self.services_cache_map[service_name].get(path, None)
 
         if cached_item_node:
             cached_item_node.data.expiration_time = expiration_time
-            self.services_cache_list[service_domain].move_to_end(cached_item_node)
+            self.services_cache_list[service_name].move_to_end(cached_item_node)
             
             return
     
@@ -167,18 +171,18 @@ class DataStore:
             raise Exception('Data exceeds max limit') 
 
         print("list...")
-        print(f'domain: {service_domain}')
-        service_data_list: DoublyLinkedList = self.services_cache_list[service_domain]
+        print(f'service name: {service_name}')
+        service_data_list: DoublyLinkedList = self.services_cache_list[service_name]
 
         print("while...")
         while not service_data_list.empty() and service_data_list.data_size + new_data_size > self.per_service_memory_limit:
             self.offset += 1
             event = {
                 'operation': 'remove',
-                'service': service_domain,
+                'service': service_name,
                 'key': path,
                 'value': service_data_list.head.data.data,
-                'expiration_time': service_data_list.head.data.expiration_time,
+                'expiration_time': service_data_list.head.data.expiration_time,#remove expiration time
                 'offset': self.offset
             }
             self.add_event_to_backlog(event)
@@ -188,15 +192,16 @@ class DataStore:
         print("cached")
         cached_data_item = CachedDataItem(data, expiration_time)
         node = service_data_list.add(cached_data_item)
-        self.services_cache_map[service_domain][path] = node
+        self.services_cache_map[service_name][path] = node
 
         self.offset += 1
 
         event = {
             'operation': 'add',
-            'service': service_domain,
+            'service': service_name,
             'key': path,
             'value': node.data.data,
+            'expiration_time': node.data.expiration_time,
             'offset': self.offset
         }
         self.add_event_to_backlog(event)
@@ -205,15 +210,15 @@ class DataStore:
     def add_event_to_backlog(self, event):
         self.backlog.append(event)
 
-        fire_event(event)
+        utils.fire_event(event)
 
 
 
-    def get(self, service_domain, path):
-        if service_domain not in self.services:
+    def get(self, service_name, path):
+        if service_name not in self.services:
             return None
 
-        cached_item_node = self.services_cache_map[service_domain].get(path, None)
+        cached_item_node = self.services_cache_map[service_name].get(path, None)
 
         if not cached_item_node or cached_item_node.data.expiration_time < datetime.datetime.utcnow():
             return None
@@ -231,7 +236,6 @@ __data_store = DataStore()
 add = __data_store.add
 get = __data_store.get
 get_backlog = __data_store.get_backlog
-
-    
+process_event = __data_store.process_event
 
 

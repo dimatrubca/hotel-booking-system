@@ -1,5 +1,6 @@
 
 from datetime import datetime, timedelta
+import json
 from threading import Thread, Timer
 from typing import List, Optional
 
@@ -26,16 +27,17 @@ def parse_query(query: str):
 
     tokens = query.split()
 
-    if len(tokens) != 2:
+    if len(tokens) != 3:
         raise Exception("Invalid query (2 tokens required)")
 
     if tokens[0] != 'GET':
         raise Exception("Invalid query (must start with GET)")
 
-    urls = tokens[1].split('|')
+    service_name = tokens[1]
+    urls = tokens[2].split('|')
     urls = [url if url.endswith('/') else url + '/' for url in urls]
 
-    return urls
+    return service_name, urls
 
 
 def parse_url(url):
@@ -47,13 +49,14 @@ def parse_url(url):
     return service_domain, path
 
 
-def get_responses(urls: List[str]):
+# todo: tackle service_domain redundancy
+def get_responses(service_name, urls: List[str]):
     result = {}
 
     for url in urls:
         service_domain, path = parse_url(url)
 
-        response = data_store.get(service_domain, path)
+        response = data_store.get(service_name, path)
 
         if response is None:
             cached_response = CachedResponse(success=False)
@@ -93,7 +96,7 @@ def add_to_cache(cache_params: CacheRequest, cache_control_header: Optional[List
 
     logger.info(f"Adding to cache, url={cache_params.url}, data={cache_params.data}, expiration_time={expiration_time}")
 
-    data_store.add(service_domain, path, expiration_time, cache_params.data)
+    data_store.add(cache_params.service_name, path, expiration_time, cache_params.data)
 
 
 def get_events_by_offset_start(start_offset):
@@ -125,10 +128,6 @@ def unregister_on_service_discovery():
     })
     
     logger.info(f"unregister_service_discovery: {result.status_code}")
-
-
-
-
 
 
 def timeout(timeout):
@@ -182,7 +181,7 @@ async def post_json_all(urls, data_list, loop):
         return results
 
 
-async def fire_event(event):
+def fire_event(event):
     response = requests.get(settings.SERVICE_DISCOVERY_CACHE_URL)
     json_response = response.json()
     nodes = {}
@@ -195,8 +194,19 @@ async def fire_event(event):
     urls = list(nodes.values())
     urls = [x + '/update' for x in urls]
 
-    loop = asyncio.get_event_loop()
-    _ = await post_json_all(urls, [event] * len(urls), loop) 
+    json_event = json.dumps(event, indent=4, sort_keys=True, default=str)
+
+    logger.info(f"firing event {json_event} to {urls}")
+
+    for url in urls:
+        try:
+
+            requests.post(url, data=json_event, timeout=0.0000000001)
+        except requests.exceptions.ReadTimeout: 
+            pass
+
+    # loop = asyncio.get_event_loop()
+    # _ = await post_json_all(urls, [event] * len(urls), loop) 
 
 
 def process_event(event: Event):

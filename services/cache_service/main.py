@@ -11,7 +11,7 @@ from models import CacheRequest
 from starlette.responses import Response
 from schemas import Event
 
-from utils import add_to_cache, parse_query, get_responses, register_on_service_discovery, unregister_on_service_discovery, get_events_by_offset_start
+from utils import add_to_cache, parse_query, get_responses, process_event, register_on_service_discovery, unregister_on_service_discovery, get_events_by_offset_start
 from election import init_election
 
 from config import settings
@@ -48,10 +48,11 @@ def get_status():
 
 
 @app.post('/update')
-def update(event: Event = Body(embed=True)):
+def update(event: Event = Body()):
     # todo: check coordinator sent message
+    process_event(event)
     
-    pass
+    return Response(status_code=status.HTTP_200_OK)
 
 
 @app.post("/announce_victory")
@@ -88,11 +89,11 @@ def request_events_by_offset_start(start: int = Query()):
 def get_cache(query: str = Query()):
     logger.info(f"get cache: {query}")
     try:
-        urls = parse_query(query)
+        service_name, urls = parse_query(query)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    response = get_responses(urls)
+    response = get_responses(service_name, urls)
 
     return response
 
