@@ -7,6 +7,7 @@ class RegisterService(BaseModel):
     name: str
     host: Optional[str]
     port: Optional[int]
+    protocol: Optional[str] = 'http'
 
 class UnregisterService(BaseModel):
     service_id: str

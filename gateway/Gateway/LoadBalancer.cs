@@ -30,53 +30,95 @@ namespace Gateway
 
         private Dictionary<string, List<PriorityWrapper<ServiceDTO>>> servicesMap = new Dictionary<string, List<PriorityWrapper<ServiceDTO>>>();
 
-        public async Task<PriorityWrapper<ServiceDTO>> GetService(string name, Destination serviceDiscovery)
+        public async Task<PriorityWrapper<ServiceDTO>> GetService(string name, Destination serviceDiscovery, List<ServiceDTO> failedServices)
         {
             Console.WriteLine($"Get Service: {name}!");
             Console.WriteLine($"after");
 
-            if (!servicesMap.ContainsKey(name) || !servicesMap[name].Any()) {
-                Console.WriteLine("Inside if");
-                var services = await GetServicesByName(name, serviceDiscovery);
+            var services = await GetServicesByName(name, serviceDiscovery);
 
-                if (services == null) throw new ApiException(System.Net.HttpStatusCode.BadRequest, "Cannot get service address by name, service discovery error"); //#todo: check response
-                var servicesWithPriority = services.Select(x => 
-                    new PriorityWrapper<ServiceDTO>
-                    {
-                        Dto = x,
-                        Priority = 0
-                    }
-                ).ToList();
-
-                Console.WriteLine($"> {name}, {servicesWithPriority[0]}");
-
-                if (!servicesMap.ContainsKey(name)) servicesMap.Add(name, servicesWithPriority); //todo: solve concurrency, remove if
-            }
-            var item = servicesMap[name];
+            if (services == null) throw new ApiException(System.Net.HttpStatusCode.BadRequest, "Cannot get service address by name, service discovery error"); //#todo: check response
+            UpdateServices(name, services);
 
             if (!servicesMap[name].Any())
             {
                 throw new ApiException(System.Net.HttpStatusCode.BadRequest, $"No service named {name} found"); //todo: customize
             }
 
-            var minLoadIndex = 0;
+            var minLoadIndex = -1;
 
             Console.WriteLine("\n\n");
             Console.WriteLine($"Load balancer, Service: {name}");
-            Console.WriteLine($"{servicesMap[name][0].Dto.Id} - {servicesMap[name][0].Priority}");
-            for (int i = 1; i < servicesMap[name].Count(); i++)
+
+            for (int i = 0; i < servicesMap[name].Count(); i++)
             {
                 Console.WriteLine($"{servicesMap[name][i].Dto.Id} - {servicesMap[name][i].Priority}");
-                if (servicesMap[name][i].Priority < servicesMap[name][minLoadIndex].Priority)
+                if ((minLoadIndex == -1 || servicesMap[name][i].Priority < servicesMap[name][minLoadIndex].Priority) &&  
+                        servicesMap[name][i].IsAvailable &&
+                        !failedServices.Any(x => x.Host == servicesMap[name][i].Dto.Host))
                 {
                     minLoadIndex = i;
                 }
             }
+
+            if (minLoadIndex == -1) return null;
+
             Console.WriteLine($"Selected: {servicesMap[name][minLoadIndex].Dto.Id}");
             Console.WriteLine("\n=============\n");
 
+
             servicesMap[name][minLoadIndex].Priority += 1;
             return servicesMap[name][minLoadIndex];
+        }
+
+        private void UpdateServices(string name, List<ServiceDTO> currentServices)
+        {
+
+            if (!servicesMap.ContainsKey(name))
+            {
+                var servicesWithPriority = currentServices.Select(x =>
+                    new PriorityWrapper<ServiceDTO>
+                    {
+                        Dto = x,
+                        Priority = 0,
+                        IsAvailable = true
+                    }
+                ).ToList();
+
+                servicesMap.Add(name, servicesWithPriority); // todo: add thread safety
+
+                return;
+            }
+
+            var services = servicesMap[name];
+
+            services.ForEach(x =>
+            {
+                var isAvailable = currentServices.Any(y => y.Host == x.Dto.Host);
+
+                if (!isAvailable)
+                {
+                    x.IsAvailable = false;
+                } else
+                {
+                    x.IsAvailable = true;
+                }
+            });
+
+            currentServices.ForEach(x =>
+            {
+                var exists = services.Any(y => y.Dto.Host == x.Host);
+
+                if (!exists)
+                {
+                    services.Add(new PriorityWrapper<ServiceDTO>
+                    {
+                        Dto = x,
+                        Priority = 0,
+                        IsAvailable = true
+                    });
+                }
+            });
         }
 
         private async Task<List<ServiceDTO>> GetServicesByName(string name, Destination serviceDiscovery)
@@ -86,8 +128,9 @@ namespace Gateway
             try
             {
                 result = await client.GetAsync($"http://service_discovery:8005/services/{name}");
-
-            } catch (HttpRequestException e)
+                //result = await client.GetAsync($"http://localhost:8005/services/{name}");
+            }
+            catch (HttpRequestException e)
             {
                 Console.WriteLine($"http error: {e}");
                 return null;

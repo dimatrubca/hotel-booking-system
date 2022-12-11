@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import socket
 import time
 import uuid
 import aiohttp
@@ -12,6 +13,7 @@ from bully import Bully
 from config import settings
 
 from utils import fetch_all, post_json_all
+import data_store
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +22,15 @@ async def send_victory_messages(urls):
     print(f'sending victory messages to urls: {urls}')
     loop = asyncio.get_event_loop()
 
-    _ = await post_json_all(urls, [{'node_id': f'http://localhost:{settings.PORT}'}] * len(urls), loop) # await>??? todo: check
+    results  = await post_json_all(urls, [{
+        'host': f'http://{socket.gethostbyname(socket.gethostname())}:{settings.PORT}',
+        'replication_id': data_store.get_replication_id(),
+        'offset': data_store.get_replication_offset(),
+        'secondary_id': data_store.get_secondary_id(),
+        'secondary_offset': data_store.get_secondary_offset()       
+    }] * len(urls), loop) # await>??? todo: check
+
+    return results
 
 
 async def send_election_messages(urls):
@@ -28,7 +38,11 @@ async def send_election_messages(urls):
     print(f'sending election messages to urls: {urls}')
     loop = asyncio.get_event_loop()
 
-    results = await post_json_all(urls, [{}] * len(urls), loop)
+    results = await post_json_all(urls, [{
+        'replication_id': data_store.get_replication_id(),
+        'replication_offset': data_store.get_replication_offset(),
+        'node_id': settings.SERVICE_ID
+    }] * len(urls), loop)
 
     return results
 
@@ -71,16 +85,19 @@ async def check_victory_message_received(bully: Bully):
 
     logger.info("Victory wasn't registered, timeout passed")
     bully.election = False
+
     await init_election(bully)
 
 
-async def self_elect_as_leader(bully: Bully, lower_id_nodes):
+async def self_elect_as_leader(bully: Bully, other_nodes):
     bully.coordinator = True
     bully.election = False
-    bully.replication_id = str(uuid.uuid1())
-    bully.offset = 0
 
-    await send_victory_messages(lower_id_nodes)
+    data_store.on_become_leader()
+
+    results = await send_victory_messages(other_nodes)
+
+    logger.info(f"self_elect_as_leader results: {results}")
 
 
 async def init_election(bully: Bully):
@@ -100,24 +117,27 @@ async def init_election(bully: Bully):
     json_response = response.json()
     nodes = {}
 
+    print(f"service discovery response: {json_response}")
+
     for node in json_response:
         nodes[node['id']] = 'http://' f'{node["host"]}:{node["port"]}' #todo: add htttp to host while registering
         print(f"queried cache nodes from service_discovery:\n")
 
-    higher_id_nodes = [ nodes[node_id] for node_id in nodes if node_id > settings.SERVICE_ID ]
-    lower_id_nodes = [ nodes[node_id] for node_id in nodes if node_id < settings.SERVICE_ID ]
+    # higher_id_nodes = [ nodes[node_id] for node_id in nodes if node_id > settings.SERVICE_ID ]
+    # lower_id_nodes = [ nodes[node_id] for node_id in nodes if node_id < settings.SERVICE_ID ]
+    other_nodes = [ nodes[node_id] for node_id in nodes if node_id != settings.SERVICE_ID ]
 
-    if len(higher_id_nodes) == 0:
-        await self_elect_as_leader(bully, lower_id_nodes)
+    if len(other_nodes) == 0:
+        await self_elect_as_leader(bully, other_nodes)
 
         return
 
-    results = await send_election_messages(higher_id_nodes)
+    results = await send_election_messages(other_nodes)
     print("results:", results)
     is_success_any = any([r.ok for r in results if isinstance(r, aiohttp.client_reqrep.ClientResponse)])
 
     if is_success_any == False:
-        await self_elect_as_leader(bully, lower_id_nodes)
+        await self_elect_as_leader(bully, other_nodes)
     else:
         # election failed, try again later
         asyncio.create_task(check_victory_message_received(bully))

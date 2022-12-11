@@ -16,6 +16,7 @@ class Service(Base):
 
     id = Column(String, primary_key=True, autoincrement=False, nullable=False)
     name = Column(VARCHAR(128))
+    protocol = Column(String)
     host = Column(String)
     port = Column(Integer)
     registred_at = Column(DateTime, default=func.now())

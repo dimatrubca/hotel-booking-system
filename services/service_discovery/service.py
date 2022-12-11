@@ -24,7 +24,7 @@ def register_service(service: RegisterService, db: Session):
 
         return service_db
 
-    service_db = models.Service(id=service.service_id, name=service.name, host=service.host, port=service.port)
+    service_db = models.Service(id=service.service_id, name=service.name, host=service.host, port=service.port, protocol=service.protocol)
     db.add(service_db)
     db.commit()
     db.refresh(service_db)

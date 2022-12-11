@@ -20,9 +20,12 @@ namespace Gateway.DTOs
         [JsonProperty("port")]
         public string Port { get; set; }
 
+        [JsonProperty("protocol")]
+        public string Protocol { get; set; }
+
         public override string ToString()
         {
-            return $"Id={Id}, Name={Name}, Host={Host}, Port={Port}";
+            return $"Id={Id}, Name={Name}, Host={Host}, Port={Port}, Protocol={Protocol}";
         }
     }
 }

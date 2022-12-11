@@ -8,6 +8,7 @@ namespace Gateway.DTOs
     public class PriorityWrapper<T>
     {
         public int Priority { get; set; }
+        public bool IsAvailable { get; set; }
         public T Dto { get; set; }
 
     }

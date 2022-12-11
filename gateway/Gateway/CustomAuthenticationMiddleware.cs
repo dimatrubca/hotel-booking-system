@@ -30,6 +30,7 @@ namespace Gateway
                         client.DefaultRequestHeaders.Add("Authorization", token.ToString());
 
                         Console.WriteLine("Before response creation...");
+                        //HttpResponseMessage response = await client.PostAsync("http://localhost:8000/verify", new StringContent(String.Empty));
                         HttpResponseMessage response = await client.PostAsync("http://authentication_server:8000/verify", new StringContent(String.Empty));
                         Console.WriteLine("After response creation...");
 

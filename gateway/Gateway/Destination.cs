@@ -20,7 +20,7 @@ namespace Gateway
 {
     public class Destination
     {
-        public string Host { get; set; }
+        public string Host { get; set; } // todo: rename to url?
         static HttpClient client = new HttpClient();
 
         private readonly static ConcurrentDictionary<string, AsyncPolicyWrap> _circuitBreakerPolicies = new ConcurrentDictionary<string, AsyncPolicyWrap>();
@@ -46,7 +46,7 @@ namespace Gateway
             Console.WriteLine($"Query string: {queryString}");
 
             Console.WriteLine($"CreateDestinationUri, Host: {Host}, queryString: {queryString}, requestPath: {requestPath}");
-            return "http://" + Host + queryString; //todo: handle host better
+            return Host + queryString; //todo: handle host better
           //  return Host + requestPath + queryString; //todo: maybe extend endpoint to include till end...
         }
 

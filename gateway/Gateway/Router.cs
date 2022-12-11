@@ -45,109 +45,149 @@ namespace Gateway
 
         }
 
-        public async Task CacheResponse(HttpResponseMessage responseToCache, string url) //todo: extract url from response?
+        public async Task CacheResponse(HttpResponseMessage responseToCache, string serviceName, string url) // todo: extract url from response?
         {
-            PriorityWrapper<ServiceDTO> cacheDTOWrapper = null;
+            List<ServiceDTO> failedServices = new List<ServiceDTO>();
 
-            try
+            while (true)
             {
-                cacheDTOWrapper = await LoadBalancer.Instance.GetService("cache", ServiceDiscovery);
-            }
-            catch (ApiException e)
-            {
-                Console.WriteLine($"Exception: {e}");
-                return;
-            }
-            var cacheURL = "http://" + cacheDTOWrapper.Dto.Host + ':' + cacheDTOWrapper.Dto.Port + '/'; // todo: handle cache
+                PriorityWrapper<ServiceDTO> cacheDTOWrapper = null;
 
+                try
+                {
+                    cacheDTOWrapper = await LoadBalancer.Instance.GetService("cache", ServiceDiscovery, failedServices);
 
-            using (var client = new HttpClient())
-            {
-                object data = new
+                    if (cacheDTOWrapper == null) {
+                        return;
+                    }
+                }
+                catch (ApiException e)
                 {
-                    url = "http://" + url, // todo: handle http
-                    data = await responseToCache.Content.ReadAsStringAsync()// todo: avoid converting string -> ...
-                };
-                HttpResponseMessage response = await client.PostAsJsonAsync(cacheURL, data);
+                    Console.WriteLine($"Exception: {e}");
+                    return;
+                }
+                var cacheURL = $"{cacheDTOWrapper.Dto.Protocol}://{cacheDTOWrapper.Dto.Host}:{cacheDTOWrapper.Dto.Port}/";
 
-                if (response.IsSuccessStatusCode)
+                using (var client = new HttpClient())
                 {
-                    Console.WriteLine($"Cached successfully, url={url}, data={data}");
-                } else
-                {
-                    Console.WriteLine("Invalid response code from cache");
-                    Console.WriteLine(await response.Content.ReadAsStringAsync());
+                    object data = new
+                    {
+                        service_name = serviceName,
+                        url = url, // todo: handle http
+                        data = await responseToCache.Content.ReadAsStringAsync()// todo: avoid converting string -> ...
+                    };
+
+                    try
+                    {
+                        HttpResponseMessage response = await client.PostAsJsonAsync(cacheURL, data);
+
+                        if (response.IsSuccessStatusCode)
+                        {
+                            Console.WriteLine($"Cached successfully, url={url}, data={data}");
+
+                            return;
+                        }
+                        else
+                        {
+                            Console.WriteLine("Invalid response code from cache");
+                            Console.WriteLine(await response.Content.ReadAsStringAsync());
+                            failedServices.Add(cacheDTOWrapper.Dto);
+
+                            continue;
+                        }
+                    } catch (Exception e)
+                    {
+                        Console.WriteLine(e);
+                        failedServices.Add(cacheDTOWrapper.Dto);
+
+                        continue;
+                    }
+
                 }
             }
         }
 
-        public async Task<HttpResponseMessage> TryQueryCache(string url)
+        public async Task<HttpResponseMessage> TryQueryCache(string serviceName, string url)
         {
-            PriorityWrapper<ServiceDTO> cacheDTOWrapper = null;
+            List<ServiceDTO> failedServices = new List<ServiceDTO>();
 
-            try
+            while (true)
             {
-                cacheDTOWrapper = await LoadBalancer.Instance.GetService("cache", ServiceDiscovery);
-            }
-            catch (ApiException e)
-            {
-                return null;
-            }
+                PriorityWrapper<ServiceDTO> cacheDTOWrapper = null;
 
-            var cacheURL = cacheDTOWrapper.Dto.Host + ':' + cacheDTOWrapper.Dto.Port + '/';
-
-
-            using (var client = new HttpClient())
-            {
                 try
                 {
-                    Console.WriteLine("Before response creation...");
+                    cacheDTOWrapper = await LoadBalancer.Instance.GetService("cache", ServiceDiscovery, failedServices);
 
-                    // https://stackoverflow.com/questions/17096201/build-query-string-for-system-net-httpclient-get 
-                    // todo: try uriBuilder
-                    var query = HttpUtility.ParseQueryString(string.Empty);
-                    query["query"] = "GET " + url; //todo: extract outside
-                    string queryString = query.ToString();
-
-                    var requestUrl = "http://" + cacheURL + "?" + "query=GET http://" + url;// queryString; //todo: handle http
-
-                    Console.WriteLine($"TryQueryCache, requestUrl={requestUrl}");
-                    HttpResponseMessage response = await client.GetAsync(requestUrl);
-
-                    Console.WriteLine($"Status code: {response.StatusCode}");
-
-                    response.EnsureSuccessStatusCode();
-                    string responseBody = await response.Content.ReadAsStringAsync();
-
-                    Console.WriteLine($"Cache Response body: {responseBody}");
-                    var responseDTO = JsonConvert.DeserializeObject<Dictionary<string, CacheResponseDTO>>(responseBody);
-                    var cacheResponseDTO = responseDTO["http://" + url + '/']; //todo: handle http, handle '/'
-                    //    JsonConvert.DeserializeObject<CacheResponseDTO>(responseBody);  //todo: check on success false...
-
-                    if (cacheResponseDTO.Success == true)
+                    if (cacheDTOWrapper == null)
                     {
-                        // or create new HttpResponseMessage???
-                        response.Content = new StringContent(cacheResponseDTO.Response, System.Text.Encoding.UTF8, "application/json");
-                        return response;
+                        return null;
                     }
+                }
+                catch (ApiException e)
+                {
+                    return null;
+                }
 
-                    Console.WriteLine($"Cache Response DTO: {cacheResponseDTO}");
-                }
-                catch (HttpRequestException e)
+                var cacheURL = $"{cacheDTOWrapper.Dto.Protocol}://{cacheDTOWrapper.Dto.Host}:{cacheDTOWrapper.Dto.Port}";
+
+
+                using (var client = new HttpClient())
                 {
-                    Console.WriteLine("error cache request " + e.ToString());
-                    return null;
+                    try
+                    {
+                        Console.WriteLine("Before response creation...");
+
+                        var requestUrl = $"{cacheURL}?query=GET {serviceName} {url}";// queryString; //todo: handle http
+
+                        Console.WriteLine($"TryQueryCache, requestUrl={requestUrl}");
+                        HttpResponseMessage response = await client.GetAsync(requestUrl);
+
+                        Console.WriteLine($"Status code: {response.StatusCode}");
+
+                        response.EnsureSuccessStatusCode();
+                        string responseBody = await response.Content.ReadAsStringAsync();
+
+                        Console.WriteLine($"Cache Response body: {responseBody}");
+                        var responseDTO = JsonConvert.DeserializeObject<Dictionary<string, CacheResponseDTO>>(responseBody);
+                        var cacheResponseDTO = responseDTO[url]; //todo: handle http, handle '/'
+                                                                 //    JsonConvert.DeserializeObject<CacheResponseDTO>(responseBody);  //todo: check on success false...
+
+                        if (cacheResponseDTO.Success == true)
+                        {
+                            // or create new HttpResponseMessage???
+                            response.Content = new StringContent(cacheResponseDTO.Response, System.Text.Encoding.UTF8, "application/json");
+                            return response;
+                        } else
+                        {
+                            failedServices.Add(cacheDTOWrapper.Dto);
+                            continue;
+                        }
+
+                        Console.WriteLine($"Cache Response DTO: {cacheResponseDTO}");
+                    }
+                    catch (HttpRequestException e)
+                    {
+                        Console.WriteLine("error cache request " + e.ToString());
+                        failedServices.Add(cacheDTOWrapper.Dto);
+
+                        continue;
+                        //return null;
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.ToString());
+                        Console.WriteLine(e.Message);
+                        Console.WriteLine("...\n\n\n");
+                        failedServices.Add(cacheDTOWrapper.Dto);
+
+                        continue;
+                        //return null;
+                    }
                 }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.ToString());
-                    Console.WriteLine(e.Message);
-                    Console.WriteLine("...\n\n\n");
-                    return null;
-                }
+
+                return null;
             }
-
-            return null;
         }
 
         public async Task<HttpResponseMessage> RouteRequest(HttpRequest request)
@@ -186,13 +226,13 @@ namespace Gateway
             }
 
             PriorityWrapper<ServiceDTO> serviceDTOWrapper;
-            serviceDTOWrapper = await LoadBalancer.Instance.GetService(serviceName, ServiceDiscovery);
-            var destinationURL = serviceDTOWrapper.Dto.Host + ':' + serviceDTOWrapper.Dto.Port + "/" + servicePath; // todo: check, + request.Path;
-
+            serviceDTOWrapper = await LoadBalancer.Instance.GetService(serviceName, ServiceDiscovery, new List<ServiceDTO>());
+            //var destinationURL = serviceDTOWrapper.Dto.Protocol + "://" + serviceDTOWrapper.Dto.Host + ':' + serviceDTOWrapper.Dto.Port + "/" + servicePath; // todo: check, + request.Path;
+            var destinationURL = $"{serviceDTOWrapper.Dto.Protocol}://{serviceDTOWrapper.Dto.Host}:{serviceDTOWrapper.Dto.Port}/{servicePath}/";
 
             if (request.Method == HttpMethod.Get.Method) // todo: solve '//' in the end of url query
             {
-                var cachedResponseMessage = await TryQueryCache(destinationURL);
+                var cachedResponseMessage = await TryQueryCache(basePath, destinationURL);
                 Console.WriteLine($"Tried query cache, response: {cachedResponseMessage}");
 
                 if (cachedResponseMessage != null)
@@ -212,7 +252,7 @@ namespace Gateway
             if ((request.Method == HttpMethod.Get.Method) && (response.IsSuccessStatusCode) && (!servicePath.ToLower().Contains("error")))
             {
                 Console.WriteLine($"Request status code: {response.StatusCode}, caching...");
-                await CacheResponse(response, destinationURL);
+                await CacheResponse(response, basePath, destinationURL);
             }
 
             serviceDTOWrapper.Priority -= 1; //todo: change position?

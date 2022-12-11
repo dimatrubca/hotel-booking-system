@@ -34,6 +34,33 @@ services:
       - service_discovery
     networks:
       - elk
+    environment:
+      - SERVICE_ID="cache1"
+      - PORT=8004
+
+  cache_service2:
+    build: ./services/cache_service
+    ports: 
+      - "8014:8014"
+    depends_on:
+      - service_discovery
+    networks:
+      - elk
+    environment:
+      - SERVICE_ID="cache2"
+      - PORT=8014
+
+  cache_service3:
+    build: ./services/cache_service
+    ports: 
+      - "8024:8024"
+    depends_on:
+      - service_discovery
+    networks:
+      - elk
+    environment:
+      - SERVICE_ID="cache3"
+      - PORT=8024
 
   gateway:
     build: ./gateway

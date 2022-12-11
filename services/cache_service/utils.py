@@ -117,6 +117,11 @@ def register_on_service_discovery():
         'name': settings.SERVICE_NAME,
         'port': settings.PORT
     })
+    print({
+        'service_id': settings.SERVICE_ID,
+        'name': settings.SERVICE_NAME,
+        'port': settings.PORT
+    })
     
     logger.info(f"register_service_discovery: {result.status_code}")
 
@@ -176,7 +181,7 @@ async def post_json(session, url, data_json):
 
 async def post_json_all(urls, data_list, loop):
     async with aiohttp.ClientSession(loop=loop) as session:
-        results = await asyncio.gather(*[post_json(session, url, data) for url, data in zip(urls, data_list)], return_exceptions=False)# todo: set to true, handle excpeptions outside
+        results = await asyncio.gather(*[post_json(session, url, data) for url, data in zip(urls, data_list)], return_exceptions=True)# todo: set to true, handle excpeptions outside
 
         return results
 

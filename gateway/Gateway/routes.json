@@ -18,8 +18,10 @@
   ],
   "authenticationService": {
     "path": "http://authentication_server:8000/api/auth/"
+    //"path": "http://localhost:8000/api/auth/"
   },
   "serviceDiscovery": {
     "path": "http://service_discovery:8005/"
+    //"path": "http://localhost:8005/"
   }
 }
