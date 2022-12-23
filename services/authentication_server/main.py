@@ -7,7 +7,12 @@ import models
 from routers import auth_router
 from utils import register_on_service_discovery, unregister_on_service_discovery
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(name)s:%(message)s', datefmt="%m/%d/%Y %I:%M:%S %p")
+logging.basicConfig(filename='logs/server.log',
+                    filemode='a',
+                    format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    level=logging.DEBUG)
+                    
 logger = logging.getLogger(__name__)
 
 load_dotenv()

@@ -102,7 +102,13 @@ def add_to_cache(cache_params: CacheRequest, cache_control_header: Optional[List
 def get_events_by_offset_start(start_offset):
     backlog = data_store.get_backlog()
 
-    start_index = list(x['offset'] == start_offset for x in backlog).index(True)
+    try:
+        start_index = list(x['offset'] == start_offset for x in backlog).index(True)
+    except Exception as e:
+        logger.info(f"requesting events ex, start_offset: {start_offset}, len backlog: {len(backlog)}")
+        
+        return []
+
     
     events = backlog[start_index:]
 

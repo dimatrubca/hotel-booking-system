@@ -10,9 +10,7 @@ async def fetch(session, url):
         print("error...", e)
 
         return None
-
-
-
+        
 
 async def fetch_all(urls, loop):
     async with aiohttp.ClientSession(loop=loop) as session:

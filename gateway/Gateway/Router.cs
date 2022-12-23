@@ -68,6 +68,8 @@ namespace Gateway
                 }
                 var cacheURL = $"{cacheDTOWrapper.Dto.Protocol}://{cacheDTOWrapper.Dto.Host}:{cacheDTOWrapper.Dto.Port}/";
 
+                serviceName = serviceName.TrimStart('/');
+
                 using (var client = new HttpClient())
                 {
                     object data = new
@@ -110,6 +112,7 @@ namespace Gateway
         public async Task<HttpResponseMessage> TryQueryCache(string serviceName, string url)
         {
             List<ServiceDTO> failedServices = new List<ServiceDTO>();
+            serviceName = serviceName.TrimStart('/');
 
             while (true)
             {
@@ -140,7 +143,8 @@ namespace Gateway
 
                         var requestUrl = $"{cacheURL}?query=GET {serviceName} {url}";// queryString; //todo: handle http
 
-                        Console.WriteLine($"TryQueryCache, requestUrl={requestUrl}");
+
+                        Console.WriteLine($"TryQueryCache, requestUrl={requestUrl}!");
                         HttpResponseMessage response = await client.GetAsync(requestUrl);
 
                         Console.WriteLine($"Status code: {response.StatusCode}");
@@ -150,6 +154,11 @@ namespace Gateway
 
                         Console.WriteLine($"Cache Response body: {responseBody}");
                         var responseDTO = JsonConvert.DeserializeObject<Dictionary<string, CacheResponseDTO>>(responseBody);
+
+                        if (!url.EndsWith("/"))
+                        {
+                            url += "/";
+                        }
                         var cacheResponseDTO = responseDTO[url]; //todo: handle http, handle '/'
                                                                  //    JsonConvert.DeserializeObject<CacheResponseDTO>(responseBody);  //todo: check on success false...
 
@@ -232,7 +241,7 @@ namespace Gateway
 
             if (request.Method == HttpMethod.Get.Method) // todo: solve '//' in the end of url query
             {
-                var cachedResponseMessage = await TryQueryCache(basePath, destinationURL);
+                var cachedResponseMessage = await TryQueryCache(basePath, servicePath);
                 Console.WriteLine($"Tried query cache, response: {cachedResponseMessage}");
 
                 if (cachedResponseMessage != null)
@@ -252,7 +261,7 @@ namespace Gateway
             if ((request.Method == HttpMethod.Get.Method) && (response.IsSuccessStatusCode) && (!servicePath.ToLower().Contains("error")))
             {
                 Console.WriteLine($"Request status code: {response.StatusCode}, caching...");
-                await CacheResponse(response, basePath, destinationURL);
+                await CacheResponse(response, basePath, servicePath);
             }
 
             serviceDTOWrapper.Priority -= 1; //todo: change position?

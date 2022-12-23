@@ -25,7 +25,20 @@ import socket
 
 # __import__('IPython').embed()
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(name)s:%(message)s', datefmt="%m/%d/%Y %I:%M:%S %p")
+logging.basicConfig(
+                    filename='logs/server.log',
+                    filemode='a',
+                    format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    level=logging.DEBUG)
+
+format = logging.Formatter('%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
+handler = logging.StreamHandler()
+handler.setFormatter(format)
+
+logging.getLogger().addHandler(handler)
+
+                    
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
@@ -44,9 +57,12 @@ app.add_middleware(
 
 async def init_election_delayed(delay): 
     await asyncio.sleep(delay)
+    logger.info(f"running on port {settings.PORT}... (sd)")
     register_on_service_discovery()
 
-    # await init_election(bully)
+    await init_election(bully)
+
+    return
     logger.info("sending...")
 
     response = requests.get(settings.SERVICE_DISCOVERY_CACHE_URL)
@@ -56,6 +72,9 @@ async def init_election_delayed(delay):
     logger.info(f"service discovery response: {json_response}")
 
     for node in json_response:
+        if str(node['port']) == str(settings.PORT):
+            continue
+        
         nodes[node['id']] = 'http://' f'{node["host"]}:{node["port"]}' #todo: add htttp to host while registering
 
     logger.info(f"Nodes: {nodes}")
@@ -63,7 +82,11 @@ async def init_election_delayed(delay):
 
     for key, url in nodes.items():
         logger.info(f"sending request to: {url}")
-        result = requests.get(f'{url}/status')
+
+        try:
+            result = requests.get(f'{url}/status')
+        except Exception as e:
+            print(f"Exception sending request: {e}")
 
         logger.info(f"result url {url}: {result.status_code}")
 
@@ -79,6 +102,35 @@ async def check_services_activity_task() -> None:
 @app.on_event("shutdown")
 def shutdown_event():
     unregister_on_service_discovery()
+
+
+@app.get("/request")
+async def send_request():
+    response = requests.get(settings.SERVICE_DISCOVERY_CACHE_URL)
+    json_response = response.json()
+    nodes = {}
+
+    logger.info(f"service discovery response: {json_response}")
+
+    for node in json_response:
+        if str(node['port']) == str(settings.PORT):
+            continue
+        
+        nodes[node['id']] = 'http://' f'{node["host"]}:{node["port"]}' #todo: add htttp to host while registering
+
+    logger.info(f"Nodes: {nodes}")
+    logger.info(f"Node items: {nodes.items()}")
+
+    for key, url in nodes.items():
+        logger.info(f"sending request to: {url}")
+
+        try:
+            result = requests.get(f'{url}/status')
+            logger.info(f"result url {url}: {result.status_code}")
+        except Exception as e:
+            print(f"Exception sending request: {e}")
+
+        
 
 
 @app.get("/status")
@@ -103,14 +155,14 @@ def anounce_victory(leader_info:LeaderUpdated = Body()):
     bully.last_leader_change_timestamp = time.time()
 
     # todo: sync data
-    logger.info("requesting copy from:" + f'{leader_info.host}/full_copy')
+    # logger.info("requesting copy from:" + f'{leader_info.host}/full_copy')
 
-    r = requests.get(f'{leader_info.host}/full_copy')
-    state_copy = r.content
+    # r = requests.get(f'{leader_info.host}/full_copy')
+    # state_copy = r.content
 
     data_store.on_leader_updated(leader_info.host, leader_info.replication_id,\
         leader_info.offset, leader_info.secondary_id, leader_info.secondary_offset)
-    data_store.update_state_from_copy(state_copy)
+    # data_store.update_state_from_copy(state_copy)
 
     logger.info("success, announce_victory")
 
@@ -153,7 +205,7 @@ def request_events_by_offset_start(start: int = Query()):
     
 @app.get("/")
 def get_cache(query: str = Query()):
-    logger.info(f"get cache: {query}")
+    logger.info(f"get cache: {query}!")
 
     # raise HTTPException(status_code=400, detail=str(e))
     try:

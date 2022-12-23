@@ -2,13 +2,13 @@ from pydantic import BaseSettings
 from dotenv import load_dotenv
 import os
 
-# load_dotenv()
+load_dotenv()
 
-sid = os.getenv('SERVICE_ID')
-print('...\n',sid,'...\n\n\n')
+# sid = os.getenv('SERVICE_ID')
+# print('...\n',sid,'...\n\n\n')
 
 class Settings(BaseSettings):
-    DEFAULT_EXPIRATION_TIME = 60
+    DEFAULT_EXPIRATION_TIME = 180*2
 
     SERVICE_DISCOVERY = "http://service_discovery:8005/"
     SERVICE_DISCOVERY_CACHE_URL = "http://service_discovery:8005/services/cache"
@@ -19,8 +19,8 @@ class Settings(BaseSettings):
 
     # SERVICE_ID: str
     # PORT: int
-    SERVICE_ID = "cache2"
-    PORT = 8014
+    SERVICE_ID = "cache3"
+    PORT = 8024
 
 
 settings = Settings()

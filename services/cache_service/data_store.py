@@ -51,6 +51,8 @@ class DataStore:
         self.replication_id = str(uuid.uuid1())
         self.secondary_offset = self.replication_offset
         self.secondary_backlog = self.backlog #todo: copy? remove secondary?
+
+        logger.info(f"Became leader, replication_id: {self.replication_id}, secondary_id: {self.secondary_id}")
         # self.replication_offset = 0 # do not reset offset
         # keep backlog
 
@@ -73,9 +75,9 @@ class DataStore:
         return data_pickle
 
     def update_state_from_copy(self, data_pickle):
-        data = pickle.loads(data_pickle)
+        logger.info("Inside update_state_from_copy, data: {data}")
 
-        print(f'Inside update_state_from_copy, data: {data}')
+        data = pickle.loads(data_pickle)
 
         self.replication_id = data[0]
         self.replication_offset = data[1]
@@ -88,7 +90,6 @@ class DataStore:
 
         self.expiration_time_heap:Dict[str, PriorityQueue] = {}
 
-        print(data[5])
 
         for key, queue in expiration_time_heap.items():
             pq = PriorityQueue()
@@ -99,16 +100,16 @@ class DataStore:
 
             self.expiration_time_heap[key] = pq
 
-        print("state updated from copy: ", self.expiration_time_heap)
-        print(self.expiration_time_heap.items())
-        print('cache list:', self.services_cache_list.items())
+        # print("state updated from copy: ", self.expiration_time_heap)
+        # print(self.expiration_time_heap.items())
+        # print('cache list:', self.services_cache_list.items())
 
-        for key, item in self.services_cache_list.items():
-            print(item.print_list())
+        # for key, item in self.services_cache_list.items():
+        #     print(item.print_list())
 
-        print('map:', self.services_cache_map.items())
-        print(self.services_cache_map['string'])
-        print(self.services_cache_map['string'].get('string/', None))
+        # print('map:', self.services_cache_map.items())
+        # print(self.services_cache_map['string'])
+        # print(self.services_cache_map['string'].get('string/', None))
 
 
     def get_replication_id(self):
@@ -129,17 +130,26 @@ class DataStore:
     def on_leader_updated(self, leader_host, leader_replication_id, leader_offset, leader_secondary_id, leader_secondary_offset):
         assert leader_offset >= leader_secondary_offset, 'offset mismatch'
 
+        logger.info(f"Inside on leader update. rid: {self.replication_id}, offset: {self.replication_offset}, leader rid: {leader_replication_id},\
+                        leader offset: {leader_offset}, leader sid: {leader_secondary_id}, leader soffset: {leader_offset}")
+
         if self.replication_id == leader_secondary_id:
             if self.replication_offset > leader_secondary_offset: #todo: check
+                logger.info("Sync, requesting full copy, id match, offset mismatch")
                 state_copy = requests.get(f'{leader_host}/full_copy')
 
-                self.update_state_from_copy(state_copy)
+                self.update_state_from_copy(state_copy.content)
                 # undo... start from scratch
                 pass
             else:
-                response = requests.get(f'/events?start={self.replication_offset+1}') #todo:assure success catch errors
+                logger.info(f"Sync, requesting events from {self.replication_offset + 1}")
+                response = requests.get(f'{leader_host}/events?start={self.replication_offset+1}') #todo:assure success catch errors
                 events = response.json()
-                self.update_state(events) # update here also backlog
+                self.update(events) # update here also backlog
+        else:
+            logger.info("Sync, requesting full coppy, diff ids")
+            state_copy = requests.get(f'{leader_host}/full_copy')
+            self.update_state_from_copy(state_copy.content)
 
         # now the state is in sync
 
@@ -153,21 +163,12 @@ class DataStore:
         if len(events) == 0:
             return
 
+
         for event in events:
-            if event['operation'] == 'add':
-                service = event['service']
-                key = event['key']
-                value = event['value']
-                offset = event['offset'] #todo: check offset match
-                expiration_time = event['expiration_time']
+            event = Event(operation=event['operation'], service=event['service'], key=event['key'], value=event['value'],\
+                            offset=event['offset'], expiration_time=event['expiration_time'])
 
-                self.add(service, key, expiration_time, value)
-
-            elif event['operation'] == 'remove':
-                service = event['service']
-                key = event['key']
-
-                self.remove_by_key(service, key)
+            self.process_event(event)
 
     
     def process_event(self, event: Event):
@@ -200,10 +201,18 @@ class DataStore:
         
         self.services_cache_list[service_name].remove(node)
 
+        self.replication_offset += 1
+
+        event = {
+            'operation': 'remove_by_key',
+            'service': service_name,
+            'key': key,
+            'value': 'val',
+            'expiration_time': None, #todo: correct
+            'offset': self.replication_offset
+        }
+        self.add_event_to_backlog(event)
         logger.info(f"Item {key} (service: {service_name}) removed")
-
-    
-
 
     
     def remove_expired_items(self,  service_name):
@@ -256,16 +265,16 @@ class DataStore:
             return
     
         new_data_size = sys.getsizeof(data)
-        print("data size:", new_data_size, self.service_item_max_size)
+        # print("data size:", new_data_size, self.service_item_max_size)
 
         if new_data_size > self.service_item_max_size:
             raise Exception('Data exceeds max limit') 
 
-        print("list...")
-        print(f'service name: {service_name}')
+        # print("list...")
+        # print(f'service name: {service_name}')
         service_data_list: DoublyLinkedList = self.services_cache_list[service_name]
 
-        print("while...")
+        # print("while...")
         while not service_data_list.empty() and service_data_list.data_size + new_data_size > self.per_service_memory_limit:
             self.replication_offset += 1
             event = {
@@ -280,7 +289,7 @@ class DataStore:
 
             service_data_list.remove_start()
 
-        print("cached")
+        # print("cached")
         cached_data_item = CachedDataItem(data, expiration_time)
         node = service_data_list.add(cached_data_item)
         self.services_cache_map[service_name][path] = node

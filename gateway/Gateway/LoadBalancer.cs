@@ -47,12 +47,18 @@ namespace Gateway
 
             var minLoadIndex = -1;
 
-            Console.WriteLine("\n\n");
-            Console.WriteLine($"Load balancer, Service: {name}");
+            Console.WriteLine("\n\nfs:");
+
+            foreach (var x in failedServices)
+            {
+                Console.Write($"{x.Host}");
+            }
+
+            Console.WriteLine($"\nLoad balancer, Service: {name}");
 
             for (int i = 0; i < servicesMap[name].Count(); i++)
             {
-                Console.WriteLine($"{servicesMap[name][i].Dto.Id} - {servicesMap[name][i].Priority}");
+                Console.WriteLine($"{servicesMap[name][i].Dto.Id} - {servicesMap[name][i].Priority}, {servicesMap[name][i].IsAvailable}, {!failedServices.Any(x => x.Host == servicesMap[name][i].Dto.Host)}");
                 if ((minLoadIndex == -1 || servicesMap[name][i].Priority < servicesMap[name][minLoadIndex].Priority) &&  
                         servicesMap[name][i].IsAvailable &&
                         !failedServices.Any(x => x.Host == servicesMap[name][i].Dto.Host))
@@ -60,6 +66,8 @@ namespace Gateway
                     minLoadIndex = i;
                 }
             }
+
+            Console.WriteLine($"Failed services param: {failedServices}, index: {minLoadIndex}");
 
             if (minLoadIndex == -1) return null;
 

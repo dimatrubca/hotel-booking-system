@@ -33,7 +33,9 @@ namespace Gateway
                     logging.AddConsole();
                     logging.AddDebug();
                     logging.AddEventSourceLogger();
-                    logging.AddFile($@"{Directory.GetCurrentDirectory()}\Logs\log.txt");
+                    logging.AddFile($@"Logs/log.txt");
+
+                    //logging.AddFile($@"{Directory.GetCurrentDirectory()}\Logs\log.txt");
                 });
     }
 }

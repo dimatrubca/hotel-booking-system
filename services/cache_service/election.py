@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 async def send_victory_messages(urls):
     urls = [url + '/announce_victory' for url in urls]
-    print(f'sending victory messages to urls: {urls}')
+    logger.info(f'sending victory messages to urls: {urls}')
     loop = asyncio.get_event_loop()
 
     results  = await post_json_all(urls, [{
@@ -51,12 +51,9 @@ async def heart_beat_leader(bully: Bully):
     logger.info("Entering heart_beating leader loop")
 
     while True:
-        logger.info("Before sleep")
-        await asyncio.sleep(4) # todo: parametarize
+        await asyncio.sleep(7) # todo: parametarize
         
-        logger.info("Heart-beating leader...")
         logger.info(f"Leader: {bully.coordinator}")
-        
 
         if not bully.election and bully.coordinator != True and bully.coordinator != None:
             loop = asyncio.get_event_loop()
@@ -117,7 +114,7 @@ async def init_election(bully: Bully):
     json_response = response.json()
     nodes = {}
 
-    print(f"service discovery response: {json_response}")
+    logger.info(f"Inside init election, service discovery response: {json_response}")
 
     for node in json_response:
         nodes[node['id']] = 'http://' f'{node["host"]}:{node["port"]}' #todo: add htttp to host while registering

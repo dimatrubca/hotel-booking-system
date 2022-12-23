@@ -1,3 +1,4 @@
+import logging
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from dotenv import load_dotenv
 
@@ -11,6 +12,12 @@ from service_schemas import RegisterService, UnregisterService
 import service
 from settings import MAX_INACTIVE_TIME
 from utils import check_services_activity
+
+logging.basicConfig(filename='logs/server.log',
+                    filemode='a',
+                    format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    level=logging.DEBUG)
 
 load_dotenv()
 
